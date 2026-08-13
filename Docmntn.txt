@@ -1,0 +1,5 @@
+npm init -y
+npm install express mysql2 cors dotenv nodemon
+
+
+Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6MSwiZW1haWwiOiJzaHdldEBleGFtcGxlLmNvbSIsInJvbGUiOiJtZW1iZXIiLCJpYXQiOjE3ODYwNDQ0MjMsImV4cCI6MTc4NjEzMDgyM30.kZ4uTOdTTpNnfwIXgJ0zE-8x1S2l9fKqvat428kYnD0
