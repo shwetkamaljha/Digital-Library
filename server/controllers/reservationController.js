@@ -16,11 +16,19 @@ const { issueBook } = require("../models/loanModel");
 // =====================================
 
 const reserve = (req, res) => {
+    console.log("[RESERVATION_CREATE] Request received", JSON.stringify({
+        user: req.user || null,
+        body: req.body
+    }, null, 2));
 
     const { book_id } = req.body;
     const member_id = req.user.id;
 
     if (!book_id) {
+        console.warn("[RESERVATION_CREATE_VALIDATION_ERROR] Missing book_id", JSON.stringify({
+            user: req.user || null,
+            body: req.body
+        }, null, 2));
         return res.status(400).json({
             message: "Book ID is required"
         });
@@ -29,7 +37,12 @@ const reserve = (req, res) => {
     getBookAvailability(book_id, (err, books) => {
 
         if (err) {
-            console.log(err);
+            console.error("[RESERVATION_BOOK_CHECK_ERROR]", JSON.stringify({
+                error: err,
+                stack: err && err.stack,
+                book_id,
+                member_id
+            }, null, 2));
 
             return res.status(500).json({
                 message: "Database Error"
@@ -37,6 +50,7 @@ const reserve = (req, res) => {
         }
 
         if (books.length === 0) {
+            console.warn("[RESERVATION_BOOK_NOT_FOUND] book_id does not exist:", book_id);
             return res.status(404).json({
                 message: "Book Not Found"
             });
@@ -44,6 +58,10 @@ const reserve = (req, res) => {
 
         // Reservation only if unavailable
         if (Number(books[0].available_copies) > 0) {
+            console.warn("[RESERVATION_INVALID_STATE] Book is available, should use Book Now", JSON.stringify({
+                book_id,
+                available_copies: books[0].available_copies
+            }, null, 2));
 
             return res.status(400).json({
                 message:
@@ -57,12 +75,23 @@ const reserve = (req, res) => {
             (err, existing) => {
 
                 if (err) {
+                    console.error("[RESERVATION_PENDING_CHECK_ERROR]", JSON.stringify({
+                        error: err,
+                        stack: err && err.stack,
+                        member_id,
+                        book_id
+                    }, null, 2));
                     return res.status(500).json({
                         message: "Database Error"
                     });
                 }
 
                 if (existing.length > 0) {
+                    console.warn("[RESERVATION_DUPLICATE_PENDING] User already has a pending reservation", JSON.stringify({
+                        member_id,
+                        book_id,
+                        existing
+                    }, null, 2));
 
                     return res.status(409).json({
                         message:
@@ -79,13 +108,23 @@ const reserve = (req, res) => {
 
                         if (err) {
 
-                            console.log(err);
+                            console.error("[RESERVATION_CREATE_DATABASE_ERROR]", JSON.stringify({
+                                error: err,
+                                stack: err && err.stack,
+                                member_id,
+                                book_id
+                            }, null, 2));
 
                             return res.status(500).json({
                                 message: "Reservation Failed"
                             });
                         }
 
+                        console.log("[RESERVATION_CREATE_SUCCESS] Reservation created", JSON.stringify({
+                            id: result && result.insertId,
+                            member_id,
+                            book_id
+                        }, null, 2));
                         res.status(201).json({
 
                             message:
@@ -111,12 +150,17 @@ const reserve = (req, res) => {
 // =====================================
 
 const allReservations = (req, res) => {
+    console.log("[RESERVATIONS_ALL] Fetching all reservations for staff");
 
     getReservations((err, result) => {
 
         if (err) {
 
-            console.log(err);
+            console.error("[RESERVATIONS_ALL_ERROR]", JSON.stringify({
+                error: err,
+                stack: err && err.stack,
+                user: req.user || null
+            }, null, 2));
 
             return res.status(500).json({
                 message:
@@ -124,6 +168,7 @@ const allReservations = (req, res) => {
             });
         }
 
+        console.log("[RESERVATIONS_ALL_SUCCESS] Returned count:", Array.isArray(result) ? result.length : "unknown");
         res.status(200).json(result);
 
     });
@@ -136,12 +181,18 @@ const allReservations = (req, res) => {
 // =====================================
 
 const myReservations = (req, res) => {
+    console.log("[RESERVATIONS_MY] Fetching reservations for user:", req.user && req.user.id);
 
     getMyReservations(
         req.user.id,
         (err, result) => {
 
             if (err) {
+                console.error("[RESERVATIONS_MY_ERROR]", JSON.stringify({
+                    error: err,
+                    stack: err && err.stack,
+                    userId: req.user && req.user.id
+                }, null, 2));
 
                 return res.status(500).json({
                     message:
@@ -150,6 +201,7 @@ const myReservations = (req, res) => {
 
             }
 
+            console.log("[RESERVATIONS_MY_SUCCESS] Returned count:", Array.isArray(result) ? result.length : "unknown");
             res.status(200).json(result);
 
         }
@@ -163,6 +215,10 @@ const myReservations = (req, res) => {
 // =====================================
 
 const accept = (req, res) => {
+    console.log("[RESERVATION_ACCEPT] Attempting to accept reservation", JSON.stringify({
+        reservationId: req.params.id,
+        user: req.user || null
+    }, null, 2));
 
     const reservationId = req.params.id;
 
@@ -171,6 +227,11 @@ const accept = (req, res) => {
         (err, rows) => {
 
             if (err) {
+                console.error("[RESERVATION_FETCH_ERROR]", JSON.stringify({
+                    error: err,
+                    stack: err && err.stack,
+                    reservationId
+                }, null, 2));
 
                 return res.status(500).json({
                     message: "Database Error"
@@ -179,7 +240,7 @@ const accept = (req, res) => {
             }
 
             if (rows.length === 0) {
-
+                console.warn("[RESERVATION_ACCEPT_NOT_FOUND] Reservation not found", reservationId);
                 return res.status(404).json({
                     message: "Reservation Not Found"
                 });
@@ -189,6 +250,10 @@ const accept = (req, res) => {
             const reservation = rows[0];
 
             if (reservation.status !== "Pending") {
+                console.warn("[RESERVATION_ACCEPT_INVALID_STATUS] Reservation is not pending", JSON.stringify({
+                    reservationId,
+                    reservationStatus: reservation.status
+                }, null, 2));
 
                 return res.status(400).json({
                     message:
@@ -202,6 +267,11 @@ const accept = (req, res) => {
                     reservation.available_copies
                 ) <= 0
             ) {
+                console.warn("[RESERVATION_ACCEPT_UNAVAILABLE] Staff tried to accept a reservation while book unavailable", JSON.stringify({
+                    reservationId,
+                    available_copies: reservation.available_copies,
+                    book_id: reservation.book_id
+                }, null, 2));
 
                 return res.status(400).json({
                     message:
@@ -216,6 +286,12 @@ const accept = (req, res) => {
                 (err, updateResult) => {
 
                     if (err) {
+                        console.error("[RESERVATION_COPY_DECREMENT_ERROR]", JSON.stringify({
+                            error: err,
+                            stack: err && err.stack,
+                            reservationId,
+                            book_id: reservation.book_id
+                        }, null, 2));
 
                         return res.status(500).json({
                             message:
@@ -227,6 +303,7 @@ const accept = (req, res) => {
                     if (
                         updateResult.affectedRows === 0
                     ) {
+                        console.warn("[RESERVATION_COPY_DECREMENT_NO_ROWS] No copies updated for book_id:", reservation.book_id);
 
                         return res.status(400).json({
                             message:
@@ -264,7 +341,17 @@ const accept = (req, res) => {
 
                             if (err) {
 
-                                console.log(err);
+                                console.error("[RESERVATION_LOAN_ISSUE_ERROR]", JSON.stringify({
+                                    error: err,
+                                    stack: err && err.stack,
+                                    reservationId,
+                                    loanPayload: {
+                                        member_id: reservation.member_id,
+                                        book_id: reservation.book_id,
+                                        issue_date: issueDate,
+                                        due_date: dueDate
+                                    }
+                                }, null, 2));
 
                                 // Rollback copy
                                 const db =
@@ -295,6 +382,11 @@ const accept = (req, res) => {
                                 (err, acceptedResult) => {
 
                                     if (err) {
+                                        console.error("[RESERVATION_ACCEPT_UPDATE_ERROR]", JSON.stringify({
+                                            error: err,
+                                            stack: err && err.stack,
+                                            reservationId
+                                        }, null, 2));
 
                                         return res.status(500).json({
                                             message:
@@ -306,6 +398,7 @@ const accept = (req, res) => {
                                     if (
                                         acceptedResult.affectedRows === 0
                                     ) {
+                                        console.warn("[RESERVATION_ACCEPT_UPDATE_NO_ROWS] No rows updated for reservation:", reservationId);
 
                                         return res.status(500).json({
                                             message:
@@ -313,6 +406,12 @@ const accept = (req, res) => {
                                         });
 
                                     }
+
+                                    console.log("[RESERVATION_ACCEPT_SUCCESS] Reservation accepted and loan issued", JSON.stringify({
+                                        reservationId,
+                                        loan_id: loanResult && loanResult.insertId,
+                                        due_date: dueDate
+                                    }, null, 2));
 
                                     res.status(200).json({
 

@@ -6,6 +6,7 @@ const swaggerUi = require("swagger-ui-express");
 
 const db = require("./config/db");
 const swaggerSpec = require("./swagger");
+const requestLogger = require("./middleware/requestLogger");
 
 const bookRoutes = require("./routes/bookRoutes");
 const memberRoutes = require("./routes/memberRoutes");
@@ -16,6 +17,7 @@ const app = express();
 
 app.use(cors());
 app.use(express.json());
+app.use(requestLogger);
 
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
     customSiteTitle: "Digital Library API Docs"
@@ -42,7 +44,27 @@ app.use("/reservations", reservationRoutes);
  *               example: Digital Library Backend Running...
  */
 app.get("/", (req, res) => {
+    console.log("[HEALTH_CHECK] Server root endpoint hit");
     res.send("Digital Library Backend Running...");
+});
+
+app.use((err, req, res, next) => {
+    console.error("[GLOBAL_ERROR_HANDLER]", JSON.stringify({
+        timestamp: new Date().toISOString(),
+        method: req.method,
+        url: req.originalUrl,
+        params: req.params,
+        query: req.query,
+        body: req.body,
+        errorName: err && err.name,
+        errorMessage: err && err.message,
+        stack: err && err.stack
+    }, null, 2));
+
+    return res.status(500).json({
+        message: "Internal Server Error",
+        error: process.env.NODE_ENV === "production" ? "Something went wrong" : (err && err.message)
+    });
 });
 
 const PORT = process.env.PORT || 5000;

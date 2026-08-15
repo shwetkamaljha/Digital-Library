@@ -15,6 +15,7 @@ const {
 // =========================
 
 const register = async (req, res) => {
+    console.log("[MEMBER_REGISTER] Payload received:", JSON.stringify(req.body, null, 2));
 
     try {
 
@@ -25,6 +26,9 @@ const register = async (req, res) => {
             !member.email ||
             !member.password
         ) {
+            console.warn("[MEMBER_REGISTER_VALIDATION_ERROR] Missing required fields", JSON.stringify({
+                received: member
+            }, null, 2));
             return res.status(400).json({
                 message: "Name, email and password are required"
             });
@@ -44,7 +48,12 @@ const register = async (req, res) => {
 
             if (err) {
 
-                console.log("REGISTER ERROR:", err);
+                console.error("[MEMBER_REGISTER_DATABASE_ERROR]", JSON.stringify({
+                    error: err,
+                    code: err && err.code,
+                    message: err && err.message,
+                    payload: member
+                }, null, 2));
 
                 if (err.code === "ER_DUP_ENTRY") {
                     return res.status(409).json({
@@ -57,6 +66,10 @@ const register = async (req, res) => {
                 });
             }
 
+            console.log("[MEMBER_REGISTER_SUCCESS] Created member:", JSON.stringify({
+                id: result && result.insertId,
+                email: member.email
+            }, null, 2));
             return res.status(201).json({
                 message: "Member Registered Successfully"
             });
@@ -65,7 +78,11 @@ const register = async (req, res) => {
 
     } catch (error) {
 
-        console.log("REGISTER SERVER ERROR:", error);
+        console.error("[MEMBER_REGISTER_SERVER_ERROR]", JSON.stringify({
+            error: error,
+            stack: error && error.stack,
+            payload: req.body
+        }, null, 2));
 
         return res.status(500).json({
             message: "Server Error"
@@ -86,12 +103,17 @@ const login = (req, res) => {
         loginRole = "member"
     } = req.body;
 
-    console.log("LOGIN REQUEST:", {
+    console.log("[MEMBER_LOGIN] Attempt", JSON.stringify({
         email,
         loginRole
-    });
+    }, null, 2));
 
     if (!email || !password) {
+        console.warn("[MEMBER_LOGIN_VALIDATION_ERROR] Missing credentials", JSON.stringify({
+            email: !!email,
+            password: !!password,
+            loginRole
+        }, null, 2));
 
         return res.status(400).json({
             message: "Email and password are required"
@@ -102,7 +124,11 @@ const login = (req, res) => {
 
         if (err) {
 
-            console.log("LOGIN DATABASE ERROR:", err);
+            console.error("[MEMBER_LOGIN_DATABASE_ERROR]", JSON.stringify({
+                error: err,
+                stack: err && err.stack,
+                email
+            }, null, 2));
 
             return res.status(500).json({
                 message: "Database Error"
@@ -110,6 +136,7 @@ const login = (req, res) => {
         }
 
         if (!result || result.length === 0) {
+            console.warn("[MEMBER_LOGIN_NOT_FOUND] No user found for email:", email);
 
             return res.status(404).json({
                 message: "User Not Found"
@@ -129,15 +156,15 @@ const login = (req, res) => {
             member.role === "admin" ||
             member.role === "librarian";
 
-
-        // =========================
-        // ADMIN LOGIN
-        // =========================
-
         if (
             requestedRole === "admin" &&
             !isAdmin
         ) {
+            console.warn("[MEMBER_LOGIN_ROLE_MISMATCH] Requested admin login for non-admin account", JSON.stringify({
+                requestedRole,
+                memberRole: member.role,
+                email
+            }, null, 2));
 
             return res.status(403).json({
                 message:
@@ -145,26 +172,21 @@ const login = (req, res) => {
             });
         }
 
-
-        // =========================
-        // MEMBER LOGIN
-        // =========================
-
         if (
             requestedRole === "member" &&
             isAdmin
         ) {
+            console.warn("[MEMBER_LOGIN_ROLE_MISMATCH] Requested member login for admin account", JSON.stringify({
+                requestedRole,
+                memberRole: member.role,
+                email
+            }, null, 2));
 
             return res.status(403).json({
                 message:
                     "Please select Login as Admin"
             });
         }
-
-
-        // =========================
-        // PASSWORD CHECK
-        // =========================
 
         try {
 
@@ -174,6 +196,7 @@ const login = (req, res) => {
             );
 
             if (!isMatch) {
+                console.warn("[MEMBER_LOGIN_PASSWORD_MISMATCH] Password mismatch for email:", email);
 
                 return res.status(401).json({
                     message: "Invalid Password"
@@ -182,36 +205,29 @@ const login = (req, res) => {
 
         } catch (error) {
 
-            console.log(
-                "PASSWORD CHECK ERROR:",
-                error
-            );
+            console.error("[MEMBER_LOGIN_PASSWORD_CHECK_ERROR]", JSON.stringify({
+                error: error,
+                stack: error && error.stack,
+                email
+            }, null, 2));
 
             return res.status(500).json({
                 message: "Password verification failed"
             });
         }
 
-
-        // =========================
-        // JWT TOKEN
-        // =========================
-
         const secret =
             process.env.JWT_SECRET;
 
         if (!secret) {
 
-            console.log(
-                "JWT_SECRET is missing in .env"
-            );
+            console.error("[MEMBER_LOGIN_JWT_SECRET_MISSING] JWT_SECRET not configured");
 
             return res.status(500).json({
                 message:
                     "Server configuration error"
             });
         }
-
 
         const token = jwt.sign(
             {
@@ -225,10 +241,11 @@ const login = (req, res) => {
             }
         );
 
-
-        // =========================
-        // LOGIN SUCCESS
-        // =========================
+        console.log("[MEMBER_LOGIN_SUCCESS] Logged in user:", JSON.stringify({
+            id: member.id,
+            email: member.email,
+            role: member.role
+        }, null, 2));
 
         return res.status(200).json({
 
@@ -254,21 +271,24 @@ const login = (req, res) => {
 // =========================
 
 const getMembers = (req, res) => {
+    console.log("[MEMBERS_GET] Fetching members for:", JSON.stringify(req.user || null, null, 2));
 
     getAllMembers((err, result) => {
 
         if (err) {
 
-            console.log(
-                "GET MEMBERS ERROR:",
-                err
-            );
+            console.error("[MEMBERS_GET_ERROR]", JSON.stringify({
+                error: err,
+                stack: err && err.stack,
+                user: req.user || null
+            }, null, 2));
 
             return res.status(500).json({
                 message: "Unable to Load Members"
             });
         }
 
+        console.log("[MEMBERS_GET_SUCCESS] Members returned count:", Array.isArray(result) ? result.length : "unknown");
         return res.status(200).json(result);
 
     });
@@ -283,6 +303,11 @@ const getMembers = (req, res) => {
 const editMember = (req, res) => {
 
     const id = req.params.id;
+    console.log("[MEMBER_UPDATE] Attempting update", JSON.stringify({
+        id,
+        body: req.body,
+        user: req.user || null
+    }, null, 2));
 
     updateMember(
         id,
@@ -291,16 +316,19 @@ const editMember = (req, res) => {
 
             if (err) {
 
-                console.log(
-                    "UPDATE MEMBER ERROR:",
-                    err
-                );
+                console.error("[MEMBER_UPDATE_ERROR]", JSON.stringify({
+                    error: err,
+                    stack: err && err.stack,
+                    id,
+                    payload: req.body
+                }, null, 2));
 
                 return res.status(500).json({
                     message: "Member Update Failed"
                 });
             }
 
+            console.log("[MEMBER_UPDATE_SUCCESS] Updated member id:", id);
             return res.json({
                 message:
                     "Member Updated Successfully"
@@ -319,6 +347,10 @@ const editMember = (req, res) => {
 const removeMember = (req, res) => {
 
     const id = req.params.id;
+    console.log("[MEMBER_DELETE] Attempting delete", JSON.stringify({
+        id,
+        user: req.user || null
+    }, null, 2));
 
     deleteMember(
         id,
@@ -326,16 +358,18 @@ const removeMember = (req, res) => {
 
             if (err) {
 
-                console.log(
-                    "DELETE MEMBER ERROR:",
-                    err
-                );
+                console.error("[MEMBER_DELETE_ERROR]", JSON.stringify({
+                    error: err,
+                    stack: err && err.stack,
+                    id
+                }, null, 2));
 
                 return res.status(500).json({
                     message: "Member Delete Failed"
                 });
             }
 
+            console.log("[MEMBER_DELETE_SUCCESS] Deleted member id:", id);
             return res.json({
                 message:
                     "Member Deleted Successfully"
