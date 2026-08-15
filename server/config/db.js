@@ -131,21 +131,55 @@ db.query = (sql, params, callback) => {
     const { sql: preparedSql, params: boundParams } = normalizeSqlForDialect(sql, safeParams);
     const sqlType = parseSqlType(preparedSql);
 
+    console.log("[DB_QUERY]", JSON.stringify({
+        sqlType,
+        sql: preparedSql.substring(0, 100),
+        paramCount: boundParams.length
+    }, null, 2));
+
     return db.raw(preparedSql, boundParams)
         .then((result) => {
             const finalResult = ["SELECT", "WITH", "SHOW", "DESC", "DESCRIBE", "EXPLAIN"].includes(sqlType)
                 ? normalizeSelectResult(result, preparedSql)
                 : normalizeMutationResult(result, preparedSql);
 
+            console.log("[DB_QUERY_SUCCESS]", JSON.stringify({
+                sqlType,
+                resultType: Array.isArray(finalResult) ? "array" : typeof finalResult,
+                resultLength: Array.isArray(finalResult) ? finalResult.length : "n/a"
+            }, null, 2));
+
             if (typeof callback === "function") {
-                callback(null, finalResult);
+                try {
+                    callback(null, finalResult);
+                } catch (cbErr) {
+                    console.error("[DB_QUERY_CALLBACK_ERROR]", JSON.stringify({
+                        error: cbErr && cbErr.message,
+                        stack: cbErr && cbErr.stack
+                    }, null, 2));
+                }
             }
 
             return finalResult;
         })
         .catch((err) => {
+            console.error("[DB_QUERY_ERROR]", JSON.stringify({
+                sqlType,
+                errorCode: err && err.code,
+                errorMessage: err && err.message,
+                errorName: err && err.name,
+                stack: err && err.stack
+            }, null, 2));
+
             if (typeof callback === "function") {
-                callback(err, null);
+                try {
+                    callback(err, null);
+                } catch (cbErr) {
+                    console.error("[DB_QUERY_ERROR_CALLBACK_ERROR]", JSON.stringify({
+                        error: cbErr && cbErr.message,
+                        stack: cbErr && cbErr.stack
+                    }, null, 2));
+                }
                 return null;
             }
             throw err;

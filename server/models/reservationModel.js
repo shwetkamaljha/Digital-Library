@@ -5,6 +5,8 @@ const knex = require("../config/db");
 // =====================================
 
 const createReservation = (data, callback) => {
+    console.log("[MODEL_CREATE_RESERVATION] Creating reservation with:", JSON.stringify(data, null, 2));
+    
     knex("reservations")
         .insert({
             member_id: data.member_id,
@@ -13,12 +15,20 @@ const createReservation = (data, callback) => {
             reservation_date: knex.raw("NOW()")
         })
         .then((result) => {
+            console.log("[MODEL_CREATE_RESERVATION_SUCCESS] Insert result:", JSON.stringify(result, null, 2));
             callback(null, {
-                insertId: result[0],
+                insertId: result && result[0] ? result[0] : undefined,
                 affectedRows: 1
             });
         })
-        .catch((err) => callback(err, null));
+        .catch((err) => {
+            console.error("[MODEL_CREATE_RESERVATION_ERROR]", JSON.stringify({
+                errorCode: err && err.code,
+                errorMessage: err && err.message,
+                stack: err && err.stack
+            }, null, 2));
+            callback(err, null);
+        });
 };
 
 

@@ -15,6 +15,7 @@ const {
 // =========================
 
 const register = async (req, res) => {
+    console.log("[MEMBER_REGISTER] Endpoint called");
     console.log("[MEMBER_REGISTER] Payload received:", JSON.stringify(req.body, null, 2));
 
     try {
@@ -46,42 +47,57 @@ const register = async (req, res) => {
         // Public registration = Member
         member.role = "member";
 
+        console.log("[MEMBER_REGISTER] About to call registerMember()");
+
         registerMember(member, (err, result) => {
 
-            if (err) {
+            try {
+                console.log("[MEMBER_REGISTER_CALLBACK] Callback invoked, err:", err ? "present" : "null", "result:", result ? "present" : "null");
 
-                console.error("[MEMBER_REGISTER_DATABASE_ERROR]", JSON.stringify({
-                    error: err,
-                    code: err && err.code,
-                    message: err && err.message,
-                    payload: member
-                }, null, 2));
+                if (err) {
 
-                const isDuplicateEmail =
-                    err.code === "ER_DUP_ENTRY" ||
-                    err.code === "23505" ||
-                    (err.message && err.message.toLowerCase().includes("duplicate"));
+                    console.error("[MEMBER_REGISTER_DATABASE_ERROR]", JSON.stringify({
+                        error: err,
+                        code: err && err.code,
+                        message: err && err.message,
+                        payload: member
+                    }, null, 2));
 
-                if (isDuplicateEmail) {
-                    return res.status(409).json({
-                        message: "Email already registered"
+                    const isDuplicateEmail =
+                        err.code === "ER_DUP_ENTRY" ||
+                        err.code === "23505" ||
+                        (err.message && err.message.toLowerCase().includes("duplicate"));
+
+                    if (isDuplicateEmail) {
+                        return res.status(409).json({
+                            message: "Email already registered"
+                        });
+                    }
+
+                    return res.status(500).json({
+                        message: "Registration Failed",
+                        error: process.env.NODE_ENV === "production" ? undefined : err.message
                     });
                 }
 
+                console.log("[MEMBER_REGISTER_SUCCESS] Created member:", JSON.stringify({
+                    id: result && result.insertId,
+                    email: member.email
+                }, null, 2));
+                return res.status(201).json({
+                    message: "Member Registered Successfully"
+                });
+            } catch (callbackError) {
+                console.error("[MEMBER_REGISTER_CALLBACK_ERROR] Error in callback:", JSON.stringify({
+                    errorName: callbackError && callbackError.name,
+                    errorMessage: callbackError && callbackError.message,
+                    stack: callbackError && callbackError.stack
+                }, null, 2));
                 return res.status(500).json({
-                    message: "Registration Failed",
-                    error: process.env.NODE_ENV === "production" ? undefined : err.message
+                    message: "Callback error during registration",
+                    error: process.env.NODE_ENV === "production" ? undefined : (callbackError && callbackError.message)
                 });
             }
-
-            console.log("[MEMBER_REGISTER_SUCCESS] Created member:", JSON.stringify({
-                id: result && result.insertId,
-                email: member.email
-            }, null, 2));
-            return res.status(201).json({
-                message: "Member Registered Successfully"
-            });
-
         });
 
     } catch (error) {

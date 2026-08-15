@@ -2,6 +2,8 @@ const knex = require("../config/db");
 
 // Issue Book
 const issueBook = (loan, callback) => {
+    console.log("[MODEL_ISSUE_BOOK] Issuing book with:", JSON.stringify(loan, null, 2));
+    
     knex("loans")
         .insert({
             member_id: loan.member_id,
@@ -11,12 +13,20 @@ const issueBook = (loan, callback) => {
             status: "Issued"
         })
         .then((result) => {
+            console.log("[MODEL_ISSUE_BOOK_SUCCESS] Insert result:", JSON.stringify(result, null, 2));
             callback(null, {
-                insertId: result[0],
+                insertId: result && result[0] ? result[0] : undefined,
                 affectedRows: 1
             });
         })
-        .catch((err) => callback(err, null));
+        .catch((err) => {
+            console.error("[MODEL_ISSUE_BOOK_ERROR]", JSON.stringify({
+                errorCode: err && err.code,
+                errorMessage: err && err.message,
+                stack: err && err.stack
+            }, null, 2));
+            callback(err, null);
+        });
 };
 
 
