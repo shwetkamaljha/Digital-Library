@@ -1,155 +1,95 @@
-const db = require("../config/db");
+const knex = require("../config/db");
 
 // Get all books
 const getAllBooks = (callback) => {
-
-    const sql = "SELECT * FROM books";
-
-    db.query(sql, (err, result) => {
-
-        if (err) {
-            return callback(err, null);
-        }
-
-        callback(null, result);
-
-    });
-
+    knex("books")
+        .select("*")
+        .then((result) => {
+            callback(null, result);
+        })
+        .catch((err) => callback(err, null));
 };
 
 // Get one book
 const getBookById = (id, callback) => {
-    const sql = "SELECT * FROM books WHERE id = ?";
-    db.query(sql, [id], callback);
+    knex("books")
+        .where("id", id)
+        .select("*")
+        .then((result) => {
+            callback(null, result);
+        })
+        .catch((err) => callback(err, null));
 };
 
 // Add new book
 const addBook = (book, callback) => {
-
-    const sql = `
-        INSERT INTO books
-        (title, author, category, isbn, total_copies, available_copies)
-        VALUES (?, ?, ?, ?, ?, ?)
-    `;
-
-    db.query(
-        sql,
-        [
-            book.title,
-            book.author,
-            book.category,
-            book.isbn,
-            book.total_copies,
-            book.available_copies
-        ],
-        (err, result) => {
-
-            if (err) {
-                return callback(err, null);
-            }
-
-            callback(null, result);
-
-        }
-    );
-
+    knex("books")
+        .insert({
+            title: book.title,
+            author: book.author,
+            category: book.category,
+            isbn: book.isbn,
+            total_copies: book.total_copies,
+            available_copies: book.available_copies
+        })
+        .then((result) => {
+            callback(null, {
+                insertId: result[0],
+                affectedRows: 1
+            });
+        })
+        .catch((err) => callback(err, null));
 };
 // Update Book
 const updateBook = (id, book, callback) => {
-
-    const sql = `
-        UPDATE books
-        SET
-            title = ?,
-            author = ?,
-            category = ?,
-            isbn = ?,
-            total_copies = ?,
-            available_copies = ?
-        WHERE id = ?
-    `;
-
-    db.query(
-        sql,
-        [
-            book.title,
-            book.author,
-            book.category,
-            book.isbn,
-            book.total_copies,
-            book.available_copies,
-            id
-        ],
-        (err, result) => {
-
-            if (err) {
-                return callback(err, null);
-            }
-
-            callback(null, result);
-
-        }
-    );
-
+    knex("books")
+        .where("id", id)
+        .update({
+            title: book.title,
+            author: book.author,
+            category: book.category,
+            isbn: book.isbn,
+            total_copies: book.total_copies,
+            available_copies: book.available_copies
+        })
+        .then((affectedRows) => {
+            callback(null, { affectedRows });
+        })
+        .catch((err) => callback(err, null));
 };
 
 // Delete Book
 const deleteBook = (id, callback) => {
-
-    const sql = "DELETE FROM books WHERE id = ?";
-
-    db.query(sql, [id], (err, result) => {
-
-        if (err) {
-            return callback(err, null);
-        }
-
-        callback(null, result);
-
-    });
-
+    knex("books")
+        .where("id", id)
+        .delete()
+        .then((affectedRows) => {
+            callback(null, { affectedRows });
+        })
+        .catch((err) => callback(err, null));
 };
 
 // Decrease Available Copies
 const decreaseAvailableCopies = (bookId, callback) => {
-
-    const sql = `
-        UPDATE books
-        SET available_copies = available_copies - 1
-        WHERE id = ? AND available_copies > 0
-    `;
-
-    db.query(sql, [bookId], (err, result) => {
-
-        if (err) {
-            return callback(err, null);
-        }
-
-        callback(null, result);
-
-    });
-
-};   // ✅ Yahin function khatam
+    knex("books")
+        .where("id", bookId)
+        .andWhere("available_copies", ">", 0)
+        .decrement("available_copies", 1)
+        .then((affectedRows) => {
+            callback(null, { affectedRows });
+        })
+        .catch((err) => callback(err, null));
+};
 
 // Increase Available Copies
 const increaseAvailableCopies = (bookId, callback) => {
-
-    const sql = `
-        UPDATE books
-        SET available_copies = available_copies + 1
-        WHERE id = ?
-    `;
-
-    db.query(sql, [bookId], (err, result) => {
-
-        if (err) {
-            return callback(err, null);
-        }
-
-        callback(null, result);
-
-    });
-
+    knex("books")
+        .where("id", bookId)
+        .increment("available_copies", 1)
+        .then((affectedRows) => {
+            callback(null, { affectedRows });
+        })
+        .catch((err) => callback(err, null));
 };
 
 module.exports = {

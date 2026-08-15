@@ -1,26 +1,24 @@
-const db = require("../config/db");
+const knex = require("../config/db");
 
 // =====================================
 // CREATE RESERVATION
 // =====================================
 
 const createReservation = (data, callback) => {
-
-    const sql = `
-        INSERT INTO reservations
-        (member_id, book_id, status, reservation_date)
-        VALUES (?, ?, 'Pending', NOW())
-    `;
-
-    db.query(
-        sql,
-        [
-            data.member_id,
-            data.book_id
-        ],
-        callback
-    );
-
+    knex("reservations")
+        .insert({
+            member_id: data.member_id,
+            book_id: data.book_id,
+            status: "Pending",
+            reservation_date: knex.raw("NOW()")
+        })
+        .then((result) => {
+            callback(null, {
+                insertId: result[0],
+                affectedRows: 1
+            });
+        })
+        .catch((err) => callback(err, null));
 };
 
 
@@ -30,35 +28,26 @@ const createReservation = (data, callback) => {
 // =====================================
 
 const getReservations = (callback) => {
-
-    const sql = `
-        SELECT
-            r.id,
-            r.member_id,
-            r.book_id,
-            r.status,
-            r.reservation_date,
-
-            m.name AS member_name,
-
-            b.title AS book_title,
-            b.author,
-            b.available_copies,
-            b.total_copies
-
-        FROM reservations r
-
-        JOIN members m
-            ON r.member_id = m.id
-
-        JOIN books b
-            ON r.book_id = b.id
-
-        ORDER BY r.reservation_date DESC
-    `;
-
-    db.query(sql, callback);
-
+    knex("reservations as r")
+        .select(
+            "r.id",
+            "r.member_id",
+            "r.book_id",
+            "r.status",
+            "r.reservation_date",
+            knex.raw("m.name AS member_name"),
+            knex.raw("b.title AS book_title"),
+            "b.author",
+            "b.available_copies",
+            "b.total_copies"
+        )
+        .join(knex.raw("members m ON r.member_id = m.id"))
+        .join(knex.raw("books b ON r.book_id = b.id"))
+        .orderBy("r.reservation_date", "desc")
+        .then((result) => {
+            callback(null, result);
+        })
+        .catch((err) => callback(err, null));
 };
 
 
@@ -67,36 +56,25 @@ const getReservations = (callback) => {
 // =====================================
 
 const getMyReservations = (memberId, callback) => {
-
-    const sql = `
-        SELECT
-            r.id,
-            r.member_id,
-            r.book_id,
-            r.status,
-            r.reservation_date,
-
-            b.title AS book_title,
-            b.author,
-            b.available_copies,
-            b.total_copies
-
-        FROM reservations r
-
-        JOIN books b
-            ON r.book_id = b.id
-
-        WHERE r.member_id = ?
-
-        ORDER BY r.reservation_date DESC
-    `;
-
-    db.query(
-        sql,
-        [memberId],
-        callback
-    );
-
+    knex("reservations as r")
+        .select(
+            "r.id",
+            "r.member_id",
+            "r.book_id",
+            "r.status",
+            "r.reservation_date",
+            knex.raw("b.title AS book_title"),
+            "b.author",
+            "b.available_copies",
+            "b.total_copies"
+        )
+        .join(knex.raw("books b ON r.book_id = b.id"))
+        .where("r.member_id", memberId)
+        .orderBy("r.reservation_date", "desc")
+        .then((result) => {
+            callback(null, result);
+        })
+        .catch((err) => callback(err, null));
 };
 
 
@@ -104,30 +82,17 @@ const getMyReservations = (memberId, callback) => {
 // GET PENDING RESERVATION
 // =====================================
 
-const getPendingReservation = (
-    memberId,
-    bookId,
-    callback
-) => {
-
-    const sql = `
-        SELECT *
-        FROM reservations
-        WHERE member_id = ?
-        AND book_id = ?
-        AND status = 'Pending'
-        LIMIT 1
-    `;
-
-    db.query(
-        sql,
-        [
-            memberId,
-            bookId
-        ],
-        callback
-    );
-
+const getPendingReservation = (memberId, bookId, callback) => {
+    knex("reservations")
+        .where("member_id", memberId)
+        .andWhere("book_id", bookId)
+        .andWhere("status", "Pending")
+        .select("*")
+        .limit(1)
+        .then((result) => {
+            callback(null, result);
+        })
+        .catch((err) => callback(err, null));
 };
 
 
@@ -135,29 +100,14 @@ const getPendingReservation = (
 // GET BOOK AVAILABILITY
 // =====================================
 
-const getBookAvailability = (
-    bookId,
-    callback
-) => {
-
-    const sql = `
-        SELECT
-            id,
-            title,
-            available_copies,
-            total_copies
-
-        FROM books
-
-        WHERE id = ?
-    `;
-
-    db.query(
-        sql,
-        [bookId],
-        callback
-    );
-
+const getBookAvailability = (bookId, callback) => {
+    knex("books")
+        .where("id", bookId)
+        .select("id", "title", "available_copies", "total_copies")
+        .then((result) => {
+            callback(null, result);
+        })
+        .catch((err) => callback(err, null));
 };
 
 
@@ -165,39 +115,25 @@ const getBookAvailability = (
 // GET RESERVATION BY ID
 // =====================================
 
-const getReservationById = (
-    reservationId,
-    callback
-) => {
-
-    const sql = `
-        SELECT
-            r.id,
-            r.member_id,
-            r.book_id,
-            r.status,
-            r.reservation_date,
-
-            b.title AS book_title,
-            b.available_copies,
-            b.total_copies
-
-        FROM reservations r
-
-        JOIN books b
-            ON r.book_id = b.id
-
-        WHERE r.id = ?
-
-        LIMIT 1
-    `;
-
-    db.query(
-        sql,
-        [reservationId],
-        callback
-    );
-
+const getReservationById = (reservationId, callback) => {
+    knex("reservations as r")
+        .select(
+            "r.id",
+            "r.member_id",
+            "r.book_id",
+            "r.status",
+            "r.reservation_date",
+            knex.raw("b.title AS book_title"),
+            "b.available_copies",
+            "b.total_copies"
+        )
+        .join(knex.raw("books b ON r.book_id = b.id"))
+        .where("r.id", reservationId)
+        .limit(1)
+        .then((result) => {
+            callback(null, result);
+        })
+        .catch((err) => callback(err, null));
 };
 
 
@@ -205,26 +141,15 @@ const getReservationById = (
 // ACCEPT RESERVATION
 // =====================================
 
-const acceptReservation = (
-    reservationId,
-    callback
-) => {
-
-    const sql = `
-        UPDATE reservations
-
-        SET status = 'Accepted'
-
-        WHERE id = ?
-        AND status = 'Pending'
-    `;
-
-    db.query(
-        sql,
-        [reservationId],
-        callback
-    );
-
+const acceptReservation = (reservationId, callback) => {
+    knex("reservations")
+        .where("id", reservationId)
+        .andWhere("status", "Pending")
+        .update({ status: "Accepted" })
+        .then((affectedRows) => {
+            callback(null, { affectedRows });
+        })
+        .catch((err) => callback(err, null));
 };
 
 
