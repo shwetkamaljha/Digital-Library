@@ -15,12 +15,34 @@ const verifyToken =
 const requireRole =
     require("../middleware/roleMiddleware");
 
-
 // =====================================
 // MEMBER
 // =====================================
 
-// Create reservation
+/**
+ * @openapi
+ * /reservations:
+ *   post:
+ *     summary: Create a reservation for an unavailable book
+ *     tags: [Reservations]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/ReservationCreate'
+ *     responses:
+ *       201:
+ *         description: Reservation created successfully
+ *       400:
+ *         description: Book available or missing book id
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden to non-members
+ */
 router.post(
     "/",
     verifyToken,
@@ -28,7 +50,22 @@ router.post(
     reserve
 );
 
-// View own reservations
+/**
+ * @openapi
+ * /reservations/mine:
+ *   get:
+ *     summary: Get a member's own reservation list
+ *     tags: [Reservations]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Reservation list returned successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden to non-members
+ */
 router.get(
     "/mine",
     verifyToken,
@@ -36,12 +73,26 @@ router.get(
     myReservations
 );
 
-
 // =====================================
 // ADMIN / LIBRARIAN
 // =====================================
 
-// View all reservations
+/**
+ * @openapi
+ * /reservations:
+ *   get:
+ *     summary: Get all reservations for staff
+ *     tags: [Reservations]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Reservation list returned successfully
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ */
 router.get(
     "/",
     verifyToken,
@@ -49,7 +100,32 @@ router.get(
     allReservations
 );
 
-// Accept reservation
+/**
+ * @openapi
+ * /reservations/{id}/accept:
+ *   put:
+ *     summary: Accept a pending reservation and issue the book to the member
+ *     tags: [Reservations]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: integer
+ *     responses:
+ *       200:
+ *         description: Reservation accepted and book issued
+ *       400:
+ *         description: Reservation already processed or book unavailable
+ *       401:
+ *         description: Unauthorized
+ *       403:
+ *         description: Forbidden
+ *       404:
+ *         description: Reservation not found
+ */
 router.put(
     "/:id/accept",
     verifyToken,
