@@ -2,24 +2,36 @@ const db = require("../config/db");
 
 // Register Member
 const registerMember = (member, callback) => {
+    const hasPhone = member.phone !== undefined && member.phone !== null && member.phone !== "";
 
-    const sql = `
-        INSERT INTO members
-        (name, email, phone, password, role)
-        VALUES (?, ?, ?, ?, ?)
-    `;
+    const sql = hasPhone
+        ? `
+            INSERT INTO members
+            (name, email, phone, password, role)
+            VALUES ($1, $2, $3, $4, $5)
+        `
+        : `
+            INSERT INTO members
+            (name, email, password, role)
+            VALUES ($1, $2, $3, $4)
+        `;
 
-    db.query(
-        sql,
-        [
+    const values = hasPhone
+        ? [
             member.name,
             member.email,
             member.phone,
             member.password,
             member.role || "member"
-        ],
-        callback
-    );
+        ]
+        : [
+            member.name,
+            member.email,
+            member.password,
+            member.role || "member"
+        ];
+
+    db.query(sql, values, callback);
 };
 
 // Find Member By Email

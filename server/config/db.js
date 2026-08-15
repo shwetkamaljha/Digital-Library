@@ -1,42 +1,167 @@
-// const mysql = require("mysql2");
+const knex = require("knex");
 
-// const connection = mysql.createConnection({
-//     host: process.env.DB_HOST,
-//     user: process.env.DB_USER,
-//     password: process.env.DB_PASSWORD,
-//     database: process.env.DB_NAME
-// });
+const DB_DIALECT = (process.env.DB_DIALECT || "postgres").toLowerCase();
+const isPostgres = DB_DIALECT === "postgres" || DB_DIALECT === "pg";
 
-// connection.connect((err) => {
-//     if (err) {
-//         console.log("Database Connection Failed");
-//         console.log(err);
-//     } else {
-//         console.log("Database Connected Successfully");
-//     }
-// });
-
-// module.exports = connection;
-
-const { Pool } = require("pg");
-
-const pool = new Pool({
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,
-    port: 5432,
-    ssl: {
-        rejectUnauthorized: false
-    }
+const db = knex({
+    client: isPostgres ? "pg" : "mysql2",
+    connection: isPostgres
+        ? {
+            host: process.env.DB_HOST || "localhost",
+            user: process.env.DB_USER || "postgres",
+            password: process.env.DB_PASSWORD || "postgres",
+            database: process.env.DB_NAME || "digital_library",
+            port: Number(process.env.DB_PORT || 5432),
+            ssl: process.env.DB_SSL === "false" ? false : { rejectUnauthorized: false }
+        }
+        : {
+            host: process.env.DB_HOST || "localhost",
+            user: process.env.DB_USER || "root",
+            password: process.env.DB_PASSWORD || "",
+            database: process.env.DB_NAME || "digital_library",
+            port: Number(process.env.DB_PORT || 3306)
+        },
+    pool: {
+        min: 0,
+        max: 10,
+        afterCreate(conn, done) {
+            if (isPostgres) {
+                conn.query("SET timezone = 'UTC'", (err) => done(err, conn));
+            } else {
+                done(null, conn);
+            }
+        }
+    },
+    acquireConnectionTimeout: 10000
 });
 
-pool.connect()
-    .then(client => {
-        console.log("Database Connected Successfully");
-        client.release();
-    })
-    .catch(err => {
-        console.error("Database Connection Failed");
-        console.error(err);
+const normalizeSqlForDialect = (sql, params) => {
+    if (!sql || !Array.isArray(params) || params.length === 0) {
+        return { sql, params };
+    }
+
+    if (!isPostgres) {
+        return { sql, params };
+    }
+
+    let index = 0;
+    const normalizedSql = sql.replace(/\?/g, () => {
+        index += 1;
+        return `$${index}`;
     });
+
+    return { sql: normalizedSql, params };
+};
+
+const normalizeMutationResult = (result, sql) => {
+    if (result && Array.isArray(result.rows)) {
+        const rows = result.rows || [];
+        const insertedId = rows.length > 0 && rows[0] && typeof rows[0].id !== "undefined"
+            ? rows[0].id
+            : undefined;
+
+        return {
+            affectedRows: typeof result.rowCount === "number" ? result.rowCount : rows.length,
+            insertId: insertedId,
+            rowCount: typeof result.rowCount === "number" ? result.rowCount : rows.length,
+            rows,
+            sql
+        };
+    }
+
+    if (Array.isArray(result) && result.length > 0) {
+        const first = result[0];
+
+        if (first && typeof first === "object" && !Array.isArray(first)) {
+            return {
+                affectedRows: Number(first.affectedRows || first.rowCount || 0),
+                insertId: first.insertId,
+                rowCount: Number(first.affectedRows || first.rowCount || 0),
+                sql
+            };
+        }
+
+        if (Array.isArray(first)) {
+            return {
+                rows: first,
+                affectedRows: first.length,
+                insertId: undefined,
+                rowCount: first.length,
+                sql
+            };
+        }
+    }
+
+    return result;
+};
+
+const normalizeSelectResult = (result, sql) => {
+    if (result && Array.isArray(result.rows)) {
+        return result.rows;
+    }
+
+    if (Array.isArray(result) && result.length > 0 && Array.isArray(result[0])) {
+        return result[0];
+    }
+
+    if (Array.isArray(result)) {
+        return result;
+    }
+
+    return result;
+};
+
+const parseSqlType = (sql) => {
+    const match = String(sql || "").trim().match(/^([A-Z]+)/i);
+    return match ? match[1].toUpperCase() : "";
+};
+
+db.query = (sql, params, callback) => {
+    if (typeof params === "function") {
+        callback = params;
+        params = [];
+    }
+
+    const safeParams = Array.isArray(params)
+        ? params
+        : params === undefined || params === null
+            ? []
+            : [params];
+
+    const { sql: preparedSql, params: boundParams } = normalizeSqlForDialect(sql, safeParams);
+    const sqlType = parseSqlType(preparedSql);
+
+    return db.raw(preparedSql, boundParams)
+        .then((result) => {
+            const finalResult = ["SELECT", "WITH", "SHOW", "DESC", "DESCRIBE", "EXPLAIN"].includes(sqlType)
+                ? normalizeSelectResult(result, preparedSql)
+                : normalizeMutationResult(result, preparedSql);
+
+            if (typeof callback === "function") {
+                callback(null, finalResult);
+            }
+
+            return finalResult;
+        })
+        .catch((err) => {
+            if (typeof callback === "function") {
+                callback(err, null);
+                return null;
+            }
+            throw err;
+        });
+};
+
+const testConnection = async () => {
+    try {
+        await db.raw("SELECT 1");
+        console.log("Database Connected Successfully");
+    } catch (error) {
+        console.error("Database Connection Failed");
+        console.error(error.message || error);
+    }
+};
+
+testConnection();
+
+module.exports = db;

@@ -34,6 +34,8 @@ const register = async (req, res) => {
             });
         }
 
+        member.phone = member.phone ?? null;
+
         const hashedPassword = await bcrypt.hash(
             member.password,
             10
@@ -55,14 +57,20 @@ const register = async (req, res) => {
                     payload: member
                 }, null, 2));
 
-                if (err.code === "ER_DUP_ENTRY") {
+                const isDuplicateEmail =
+                    err.code === "ER_DUP_ENTRY" ||
+                    err.code === "23505" ||
+                    (err.message && err.message.toLowerCase().includes("duplicate"));
+
+                if (isDuplicateEmail) {
                     return res.status(409).json({
                         message: "Email already registered"
                     });
                 }
 
                 return res.status(500).json({
-                    message: "Registration Failed"
+                    message: "Registration Failed",
+                    error: process.env.NODE_ENV === "production" ? undefined : err.message
                 });
             }
 
